@@ -18,7 +18,7 @@ const SOURCES = [
 const EVENTS = {
   src_mistral: [
     { id: "e1", schema_version: "1", source_id: "src_mistral", type: "trade.opened", occurred_at: iso(3 * 864e5), published_at: iso(3 * 864e5), data: { position_side: "long", action: "open", instrument: inst("BTC/USDT", "BTC"), quantity: "0.1", reference_price: "60000", simulation: "paper", trade_id: "t1" } },
-    { id: "e2", schema_version: "1", source_id: "src_mistral", type: "trade.opened", occurred_at: iso(2 * 36e5), published_at: iso(2 * 36e5), data: { position_side: "short", action: "open", instrument: inst("ETH/USDT", "ETH"), quantity: "1", reference_price: "3000", simulation: "paper", trade_id: "t2" } },
+    { id: "e2", schema_version: "1", source_id: "src_mistral", type: "trade.opened", occurred_at: iso(2 * 36e5), published_at: iso(2 * 36e5), data: { position_side: "short", action: "open", instrument: inst("ETH/USDT", "ETH"), quantity: "1", reference_price: "3000", simulation: "paper", trade_id: "t2", stop_loss: "3100", take_profit: "2800", leverage: 3 } },
     { id: "e3", schema_version: "1", source_id: "src_mistral", type: "order.filled", occurred_at: iso(1 * 36e5), published_at: iso(1 * 36e5), data: { side: "buy", instrument: inst("SOL/USDT", "SOL"), quantity: "5", reference_price: "150", simulation: "paper", order_id: "o3" } },
   ],
   src_kimi: [
@@ -26,7 +26,7 @@ const EVENTS = {
   ],
 };
 const STATE = {
-  src_mistral: { open_trades: [{ trade_id: "t1", position_side: "long", instrument: inst("BTC/USDT", "BTC") }, { trade_id: "t2", position_side: "short", instrument: inst("ETH/USDT", "ETH") }, { trade_id: "t9", position_side: "long", instrument: inst("XRP/USDT", "XRP") }], pending_orders: [], open_bets: [], holdings: [] },
+  src_mistral: { open_trades: [{ trade_id: "t1", position_side: "long", instrument: inst("BTC/USDT", "BTC"), reference_price: "60000", exit_plan: { sl: "58000", tp: "65000" } }, { trade_id: "t2", position_side: "short", instrument: inst("ETH/USDT", "ETH") }, { trade_id: "t9", position_side: "long", instrument: inst("XRP/USDT", "XRP") }], pending_orders: [], open_bets: [], holdings: [] },
   src_kimi: { open_trades: [{ trade_id: "kt1", position_side: "long", instrument: inst("BTC/USDT", "BTC") }, { trade_id: "kt2", position_side: "long", instrument: inst("ETH/USDT", "ETH") }, { trade_id: "kt3", position_side: "short", instrument: inst("DOGE/USDT", "DOGE") }], pending_orders: [], open_bets: [], holdings: [] },
 };
 
@@ -87,7 +87,7 @@ await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
 
 await test("liste des outils", async () => {
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["get_consensus", "get_recent_signals", "get_signals", "get_source_state", "list_sources"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["get_consensus", "get_recent_signals", "get_signals", "get_source_state", "inspect_fields", "list_sources"]);
 });
 
 await test("list_sources résout Mistral et Kimi", async () => {
@@ -135,6 +135,26 @@ await test("get_consensus", async () => {
   assert.deepEqual(d.conflicts.map((c) => c.asset), ["ETH/USDT"]);
   assert.deepEqual(d.only_mistral.map((c) => c.asset), ["XRP/USDT"]);
   assert.deepEqual(d.only_kimi.map((c) => c.asset), ["DOGE/USDT"]);
+});
+
+await test("TP / SL / levier extraits des signaux", async () => {
+  const d = parse(await client.callTool({ name: "get_recent_signals", arguments: { source: "mistral", hours: 24 } }));
+  const e2 = d.sources.mistral.events.find((e) => e.id === "e2");
+  assert.equal(e2.stop_loss, "3100"); assert.equal(e2.take_profit, "2800"); assert.equal(e2.leverage, 3);
+  assert.equal(e2.extra.stop_loss, "3100"); // champs non filtrés
+});
+
+await test("TP / SL dans le consensus (champ imbriqué)", async () => {
+  const d = parse(await client.callTool({ name: "get_consensus", arguments: {} }));
+  assert.equal(d.consensus[0].risk_a.stop_loss, "58000");
+  assert.equal(d.consensus[0].risk_a.take_profit, "65000");
+  assert.equal(d.consensus[0].risk_a.entry, "60000");
+});
+
+await test("inspect_fields liste les champs réels", async () => {
+  const d = parse(await client.callTool({ name: "inspect_fields", arguments: { source: "mistral" } }));
+  assert.ok("stop_loss" in d.event_fields);
+  assert.ok("exit_plan.sl" in d.state_fields);
 });
 
 await test("source inconnue -> erreur propre", async () => {
