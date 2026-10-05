@@ -87,7 +87,7 @@ await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
 
 await test("liste des outils", async () => {
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["get_consensus", "get_recent_signals", "get_signals", "get_source_state", "inspect_fields", "list_sources"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["get_consensus", "get_exit_profile", "get_recent_signals", "get_signals", "get_source_state", "inspect_fields", "list_sources"]);
 });
 
 await test("list_sources résout Mistral et Kimi", async () => {

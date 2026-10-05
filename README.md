@@ -16,6 +16,21 @@ Serveur MCP **en lecture seule** qui lit les signaux de l'arène Obside
 | `get_signals` | Lecture page par page avec curseur (`beginning`, `now`, ou `next_cursor`) |
 | `get_source_state` | Trades ouverts, ordres en attente, poids actuels d'une source |
 | `get_consensus` | Actifs où Mistral et Kimi sont dans le même sens / en conflit |
+| `get_exit_profile` | SL / TP **implicites** : reconstitue les trades fermés (30 j), mesure gains, pertes, MAE/MFE avec l'historique de prix, et propose des niveaux pour les positions ouvertes |
+| `inspect_fields` | Diagnostic : tous les champs réellement envoyés par Obside |
+
+### À propos des SL / TP
+
+Obside ne publie pas de stop-loss ni de take-profit : les modèles de l'Arène ouvrent et ferment au marché.
+`get_exit_profile` les déduit du comportement passé de chaque modèle :
+
+- **SL implicite** = le plus large entre le 90e percentile du pire écart subi par les trades gagnants et la perte médiane (pour ne pas couper des trades que le modèle aurait gagnés).
+- **TP implicite** = gain médian encaissé sur les trades gagnants.
+- Calcul par actif dès 8 trades, sinon global. Le champ `reliability` indique si l'échantillon est suffisant.
+
+Prix historiques publics, sans clé : Binance (crypto) et Yahoo Finance (indices, or, forex, actions).
+Si un actif n'est pas reconnu, il apparaît dans `skipped` ; on peut forcer la correspondance avec la variable
+`PRICE_SYMBOL_MAP`, par ex. `{"US500":"^GSPC","GOLD":"GC=F"}`.
 
 ## Variables d'environnement (à saisir dans Vercel, jamais dans le code)
 
